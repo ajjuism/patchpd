@@ -836,6 +836,72 @@ function App() {
           </div>
         </div>
       </div>
+
+      {/* API Settings Modal */}
+      {showApiSettings && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-[#1e1e1e] border border-[#404040] rounded-lg w-[400px] shadow-xl">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[#404040]">
+              <div className="flex items-center gap-2">
+                <Settings className="w-4 h-4 text-blue-400" />
+                <h2 className="text-sm font-medium">API Settings</h2>
+              </div>
+              <button
+                onClick={() => setShowApiSettings(false)}
+                className="p-1 hover:bg-[#2d2d2d] rounded"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleApiKeySubmit} className="p-4">
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="apiKey" className="block text-sm font-medium mb-1">
+                    OpenAI API Key
+                  </label>
+                  <input
+                    id="apiKey"
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#252526] border border-[#404040] rounded-md text-sm 
+                             focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="sk-..."
+                  />
+                  {apiKeyError && (
+                    <p className="mt-1 text-xs text-red-400">{apiKeyError}</p>
+                  )}
+                </div>
+                
+                <div className="text-xs text-gray-400">
+                  Your API key is stored locally in your browser and never sent to our servers.
+                </div>
+                
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowApiSettings(false)}
+                    className="px-3 py-1.5 text-sm bg-[#2d2d2d] hover:bg-[#3d3d3d] rounded 
+                             transition-colors border border-[#404040]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 rounded 
+                             transition-colors text-white"
+                  >
+                    Save API Key
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      <Toaster position="bottom-right" />
     </div>
   );
 }
