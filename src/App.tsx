@@ -32,6 +32,7 @@ function App() {
   const [apiKeyError, setApiKeyError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('explorer');
   const [showSearch, setShowSearch] = useState(false);
+  const [showGettingStartedPopup, setShowGettingStartedPopup] = useState(false);
 
   // Add this function to filter history items
   const filteredHistory = useMemo(() => {
@@ -900,6 +901,46 @@ function App() {
           </div>
         </div>
       )}
+
+      {/* Add this floating help button and popup before the Toaster */}
+      <div className="fixed bottom-4 right-4 z-50">
+        <button
+          onClick={() => setShowGettingStartedPopup(prev => !prev)}
+          className="w-10 h-10 bg-blue-600 hover:bg-blue-700 rounded-full flex items-center justify-center shadow-lg transition-colors"
+          title="Getting Started"
+        >
+          <HelpCircle className="w-5 h-5" />
+        </button>
+
+        {showGettingStartedPopup && (
+          <div className="absolute bottom-12 right-0 w-80 bg-[#1e1e1e] border border-[#404040] rounded-lg shadow-xl">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[#404040]">
+              <div className="flex items-center gap-2">
+                <Info className="w-4 h-4 text-blue-400" />
+                <h2 className="text-sm font-medium">Getting Started</h2>
+              </div>
+              <button
+                onClick={() => setShowGettingStartedPopup(false)}
+                className="p-1 hover:bg-[#2d2d2d] rounded"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 text-sm space-y-3">
+              <p>Welcome to Patch.pd! Here's how to get started:</p>
+              <ol className="list-decimal list-inside space-y-2">
+                <li>Enter your OpenAI API key in Settings</li>
+                <li>Type a description of the sound you want to create</li>
+                <li>Click "Generate Patch" to create your Pure Data patch</li>
+                <li>Download the .pd file and open it in Pure Data</li>
+              </ol>
+              <p className="text-gray-400">
+                Need help? Check out our documentation for more examples and tips.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
 
       <Toaster position="bottom-right" />
     </div>
