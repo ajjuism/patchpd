@@ -1,16 +1,27 @@
-import { useState } from 'react';
-import { Terminal, Loader2, Download, Play, FileCode2, Info, Settings, ChevronRight, Folder, History, Clock, Search, Command, X, RefreshCw, AlertCircle, HelpCircle } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Terminal, Loader2, Download, Play, FileCode2, Info, Settings, ChevronRight, Folder, History, Clock, Search, Command, X, RefreshCw, AlertCircle, HelpCircle, File as FileIcon, Package, CheckCircle } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { generatePdPatch } from './lib/openai';
 import { PatchEditor } from './components/PatchEditor';
 import type { PdPatch } from './types';
+
+// Add this type above the App function
+type Tab = 'explorer' | 'history' | 'settings';
+
+// Add this utility function at the top of the file
+const truncateText = (text: string, maxLength: number = 50) => {
+  return text.length > maxLength ? `${text.substring(0, maxLength)}...` : text;
+};
 
 function App() {
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [currentPatch, setCurrentPatch] = useState<PdPatch | null>(null);
   const [showExplanation, setShowExplanation] = useState(true);
-  const [history, setHistory] = useState<PdPatch[]>([]);
+  const [history, setHistory] = useState<PdPatch[]>(() => {
+    const savedHistory = localStorage.getItem('pdPatchHistory');
+    return savedHistory ? JSON.parse(savedHistory) : [];
+  });
   const [showHistory, setShowHistory] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [pdErrors, setPdErrors] = useState<string>('');
@@ -19,6 +30,17 @@ function App() {
   const [showApiSettings, setShowApiSettings] = useState(false);
   const [apiKey, setApiKey] = useState(localStorage.getItem('openai_api_key') || '');
   const [apiKeyError, setApiKeyError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<Tab>('explorer');
+  const [showSearch, setShowSearch] = useState(false);
+
+  // Add this function to filter history items
+  const filteredHistory = useMemo(() => {
+    if (!searchQuery) return history;
+    return history.filter(patch => 
+      patch.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      patch.content.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [history, searchQuery]);
 
   const handleGenerate = async () => {
     if (!prompt.trim()) {
@@ -32,7 +54,6 @@ function App() {
     try {
       const result = await generatePdPatch(prompt);
       
-      // Create new patch with complete metadata
       const newPatch: PdPatch = {
         name: `patch_${Date.now()}`,
         content: result.patch,
@@ -80,7 +101,11 @@ function App() {
       }
 
       setCurrentPatch(newPatch);
-      setHistory((prev: PdPatch[]) => [newPatch, ...prev]);
+      setHistory(prev => {
+        const updated = [newPatch, ...prev];
+        localStorage.setItem('pdPatchHistory', JSON.stringify(updated));
+        return updated;
+      });
       toast.success('Patch generated successfully!');
     } catch (error: any) {
       if (error.message.includes('API key')) {
@@ -115,33 +140,43 @@ function App() {
     toast.success('Patch downloaded successfully!');
   };
 
-  const handleErrorFeedback = async () => {
-    if (!pdErrors.trim() || !currentPatch) {
-      toast.error('Please enter error feedback');
-      return;
-    }
+  const handleRegenerate = async (errorMessage: string) => {
+    if (!currentPatch) return;
 
     setIsRegenerating(true);
+    setPdErrors('');
+
     try {
-      const { patch, explanation } = await generatePdPatch(prompt, pdErrors);
-      const newPatch: PdPatch = {
-        name: `patch_${Date.now()}`,
-        content: patch,
-        explanation,
-        description: `${prompt} (Regenerated with error fixes)`,
-        created: new Date(),
+      const result = await generatePdPatch(currentPatch.description, errorMessage);
+      
+      // Update the current patch with the regenerated version and error history
+      const updatedPatch: PdPatch = {
+        ...currentPatch,
         errorHistory: [
           {
-            error: pdErrors,
+            error: errorMessage,
+            timestamp: new Date(),
+            regeneratedPatch: {
+              content: result.patch,
+              explanation: result.explanation,
             timestamp: new Date()
+            }
           },
           ...(currentPatch.errorHistory || [])
         ]
       };
-      setCurrentPatch(newPatch);
-      setHistory((prev: PdPatch[]) => [newPatch, ...prev]);
-      setPdErrors(''); // Clear errors after successful regeneration
-      toast.success('Patch regenerated with fixes!');
+
+      setCurrentPatch(updatedPatch);
+      
+      // Update history
+      setHistory(prev => {
+        const updated = prev.map(p => 
+          p.name === currentPatch.name ? updatedPatch : p
+        );
+        localStorage.setItem('pdPatchHistory', JSON.stringify(updated));
+        return updated;
+      });
+
     } catch (error) {
       toast.error('Failed to regenerate patch');
       console.error(error);
@@ -191,20 +226,63 @@ function App() {
     toast.success('API key saved successfully');
   };
 
+  const clearHistory = () => {
+    setHistory([]);
+    localStorage.removeItem('pdPatchHistory');
+  };
+
+  const handleViewCode = (content: string) => {
+    setCurrentPatch(prev => prev ? {...prev, content} : null);
+  };
+
+  // Add this section to display regeneration history in the explorer
+  const RegenerationHistory = ({ patch, onViewCode }: { patch: PdPatch, onViewCode: (content: string) => void }) => {
+    if (!patch.errorHistory?.length) return null;
+
+    return (
+      <div className="mt-4 space-y-3">
+        <div className="text-xs text-gray-400">Regeneration History:</div>
+        {patch.errorHistory.map((entry, index) => (
+          <div key={index} className="text-xs bg-[#1e1e1e] rounded p-2">
+            <div className="flex items-center gap-1 mb-1">
+              <Clock className="w-3 h-3 text-blue-400" />
+              <span className="text-gray-400">
+                {new Date(entry.timestamp).toLocaleTimeString()}
+              </span>
+            </div>
+            <div className="text-orange-400 mb-1">Error:</div>
+            <div className="text-gray-300 mb-2">{entry.error}</div>
+            {entry.regeneratedPatch && (
+              <div className="text-green-400">
+                ✓ Regenerated solution available
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className="h-screen bg-[#1e1e1e] text-gray-300 flex flex-col overflow-hidden" onKeyDown={handleKeyDown}>
       {/* Activity Bar */}
       <div className="fixed left-0 top-0 bottom-0 w-12 bg-[#333333] border-r border-[#404040] flex flex-col items-center py-2 z-10">
-        <button className="p-2.5 text-white bg-[#2d2d2d] rounded-lg mb-4">
+        <button 
+          onClick={() => setActiveTab('explorer')}
+          className={`p-2.5 ${activeTab === 'explorer' ? 'text-white bg-[#2d2d2d]' : 'text-gray-400'} hover:text-white transition-colors rounded-lg mb-2`}
+        >
           <FileCode2 className="w-5 h-5" />
         </button>
         <button 
-          onClick={() => setShowHistory(!showHistory)}
-          className={`p-2.5 ${showHistory ? 'text-white bg-[#2d2d2d]' : 'text-gray-400'} hover:text-white transition-colors rounded-lg mb-2`}
+          onClick={() => setActiveTab('history')}
+          className={`p-2.5 ${activeTab === 'history' ? 'text-white bg-[#2d2d2d]' : 'text-gray-400'} hover:text-white transition-colors rounded-lg mb-2`}
         >
           <History className="w-5 h-5" />
         </button>
-        <button className="p-2.5 text-gray-400 hover:text-white transition-colors rounded-lg">
+        <button 
+          onClick={() => setActiveTab('settings')}
+          className={`p-2.5 ${activeTab === 'settings' ? 'text-white bg-[#2d2d2d]' : 'text-gray-400'} hover:text-white transition-colors rounded-lg`}
+        >
           <Settings className="w-5 h-5" />
         </button>
       </div>
@@ -216,10 +294,13 @@ function App() {
           {/* Explorer Header - Fixed */}
           <div className="flex-none px-4 h-12 flex items-center justify-between border-b border-[#404040]">
             <span className="text-sm font-medium tracking-wide">
-              {showHistory ? 'HISTORY' : 'EXPLORER'}
+              {activeTab.toUpperCase()}
             </span>
             <div className="flex items-center gap-2">
-              <button className="p-1 hover:bg-[#2d2d2d] rounded">
+              <button 
+                onClick={() => setShowSearch(!showSearch)}
+                className={`p-1 hover:bg-[#2d2d2d] rounded ${showSearch ? 'bg-[#2d2d2d]' : ''}`}
+              >
                 <Search className="w-4 h-4" />
               </button>
               <button className="p-1 hover:bg-[#2d2d2d] rounded">
@@ -228,44 +309,142 @@ function App() {
             </div>
           </div>
           
+          {/* Add search input field */}
+          {showSearch && (
+            <div className="flex-none px-4 py-2 border-b border-[#404040]">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search patches..."
+                className="w-full px-3 py-1.5 bg-[#1e1e1e] border border-[#404040] rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                autoFocus
+              />
+            </div>
+          )}
+          
           {/* Explorer Content - Scrollable */}
           <div className="flex-1 overflow-y-auto custom-scrollbar">
-            {showHistory ? (
-              <div className="space-y-1">
-                {history.map((patch, index) => (
-                  <div
-                    key={index}
-                    onClick={() => setCurrentPatch(patch)}
-                    className={`px-2 py-1.5 text-sm hover:bg-[#2d2d2d] rounded cursor-pointer ${
-                      currentPatch?.name === patch.name ? 'bg-[#37373d]' : ''
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-blue-400" />
-                      <span className="truncate">{patch.name}.pd</span>
-                    </div>
-                    <p className="text-xs text-gray-500 ml-6 mt-0.5 truncate">
-                      {patch.description}
-                    </p>
+            {activeTab === 'history' ? (
+              <div className="flex flex-col h-full">
+                <div className="flex items-center justify-between px-4 py-2 border-b border-[#404040]">
+                  <div className="flex items-center gap-2">
+                    <History className="w-4 h-4 text-blue-400" />
+                    <span className="text-sm font-medium text-gray-300">Generation History</span>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center gap-1 px-2 py-1 text-sm">
-                  <ChevronRight className="w-4 h-4" />
-                  <Folder className="w-4 h-4 text-blue-400" />
-                  <span className="opacity-80">PURE DATA PATCHES</span>
+                  <button
+                    onClick={() => clearHistory()}
+                    className="text-xs text-gray-500 hover:text-gray-400 transition-colors"
+                  >
+                    Clear
+                  </button>
                 </div>
-                {currentPatch && (
-                  <div className="ml-6 mt-1">
-                    <div className="px-2 py-1 text-sm bg-[#37373d] rounded cursor-pointer flex items-center gap-2">
-                      <FileCode2 className="w-4 h-4 text-yellow-400" />
-                      {currentPatch.name}.pd
+
+                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                  {history.map((patch: PdPatch, index: number) => (
+                    <div
+                      key={index}
+                      onClick={() => setCurrentPatch(patch)}
+                      className={`group px-3 py-2.5 rounded-md cursor-pointer transition-all
+                                 hover:bg-[#2d2d2d] ${currentPatch?.name === patch.name ? 'bg-[#2d2d2d]' : ''}`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <FileIcon className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between">
+                            <div className="text-sm text-gray-300 font-medium truncate">
+                              {truncateText(patch.description, 40)}
+                            </div>
+                            <span className="text-xs text-gray-500 flex-shrink-0">
+                              {new Date(patch.created).toLocaleDateString()}
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center gap-3 mt-1.5">
+                            <span className="text-xs text-gray-500 flex items-center gap-1.5">
+                              <Clock className="w-3 h-3" />
+                              {new Date(patch.created).toLocaleTimeString([], {
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                            
+                            {patch.metadata.requiredObjects.length > 0 && (
+                              <span className="text-xs text-gray-500 flex items-center gap-1.5">
+                                <Package className="w-3 h-3" />
+                                {patch.metadata.requiredObjects.length} objects
+                              </span>
+                            )}
+                            
+                            {patch.errorHistory && patch.errorHistory.length > 0 && (
+                              <span className="text-xs text-orange-400/90 flex items-center gap-1.5">
+                                <AlertCircle className="w-3 h-3" />
+                                {patch.errorHistory.length} {patch.errorHistory.length === 1 ? 'error' : 'errors'}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     </div>
+                  ))}
+
+                  {history.length === 0 && (
+                    <div className="flex flex-col items-center justify-center h-full text-gray-500">
+                      <History className="w-8 h-8 mb-2 opacity-20" />
+                      <p className="text-sm">No generations yet</p>
+                      <p className="text-xs mt-1 opacity-60">Generated patches will appear here</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : activeTab === 'explorer' ? (
+              <div className="h-full overflow-y-auto custom-scrollbar">
+                {currentPatch ? (
+                  <div className="p-4 space-y-4">
+                    <div className="space-y-2">
+                      <div className="text-sm font-medium text-gray-300">{currentPatch.description}</div>
+                      <div className="text-xs text-gray-500">
+                        Created {new Date(currentPatch.created).toLocaleString()}
+                      </div>
+                    </div>
+
+                    <div className="bg-[#1e1e1e] rounded-md overflow-hidden border border-[#404040]">
+                      <PatchEditor content={currentPatch.content} />
+                    </div>
+
+                    {currentPatch.errorHistory && currentPatch.errorHistory.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="text-sm font-medium text-gray-300">Error History</div>
+                        <RegenerationHistory 
+                          patch={currentPatch} 
+                          onViewCode={handleViewCode}
+                        />
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-gray-500">
+                    <FileCode2 className="w-12 h-12 mb-3 opacity-20" />
+                    <p className="text-sm">No patch selected</p>
+                    <p className="text-xs mt-1 opacity-60">Generate a patch to see it here</p>
                   </div>
                 )}
-              </>
+              </div>
+            ) : activeTab === 'settings' ? (
+              <div className="p-4">
+                <button
+                  onClick={() => setShowApiSettings(true)}
+                  className="w-full px-3 py-2 text-sm bg-[#2d2d2d] hover:bg-[#3d3d3d] rounded-md transition-colors text-left"
+                >
+                  Configure API Key
+                </button>
+              </div>
+            ) : (
+              <div className="p-4">
+                <div className="text-sm text-gray-500">
+                  Explorer content goes here
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -421,7 +600,7 @@ function App() {
                   />
                   
                   <button
-                    onClick={handleErrorFeedback}
+                    onClick={() => handleRegenerate(pdErrors)}
                     disabled={isRegenerating || !pdErrors.trim()}
                     className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2 
                              bg-gradient-to-b from-orange-600 to-orange-700 
@@ -446,52 +625,86 @@ function App() {
                 {/* Revision History Section */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
                   <div className="p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <History className="w-4 h-4 text-gray-400" />
-                      <h3 className="text-sm font-medium text-gray-400">Revision History</h3>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <History className="w-4 h-4 text-gray-400" />
+                        <h3 className="text-sm font-medium text-gray-400">Revision History</h3>
+                      </div>
+                      <span className="text-xs text-gray-500">{history.length} items</span>
                     </div>
 
-                    {history
-                      .filter((patch: PdPatch) => patch.description.includes("Regenerated"))
-                      .map((patch: PdPatch, index: number) => (
+                    <div className="space-y-2">
+                      {history.map((patch: PdPatch, index: number) => (
                         <div
                           key={index}
                           onClick={() => setCurrentPatch(patch)}
-                          className="mb-3 p-3 bg-[#252526] rounded-md cursor-pointer 
-                                   hover:bg-[#2d2d2d] transition-colors
-                                   border border-[#404040] border-opacity-50"
+                          className={`group rounded-lg border transition-all
+                            ${currentPatch?.name === patch.name 
+                              ? 'border-orange-500/20 bg-orange-500/5' 
+                              : 'border-[#404040] hover:border-orange-500/20 hover:bg-[#2d2d2d]'
+                            }`}
                         >
-                          <div className="flex items-center justify-between mb-1">
-                            <div className="flex items-center gap-2">
-                              <FileCode2 className="w-4 h-4 text-orange-400" />
-                              <span className="text-sm font-medium text-gray-300">
-                                Revision {index + 1}
-                              </span>
+                          <div className="px-3 py-2">
+                            <div className="flex items-start gap-2.5">
+                              <FileIcon className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" />
+                              <div className="min-w-0 flex-1">
+                                <div className="text-sm text-gray-200 font-medium truncate">
+                                  {truncateText(patch.description, 40)}
+                                </div>
+                                
+                                <div className="flex items-center gap-3 mt-1.5">
+                                  <span className="text-xs text-gray-500 flex items-center gap-1.5">
+                                    <Clock className="w-3 h-3" />
+                                    {new Date(patch.created).toLocaleString([], {
+                                      month: 'short',
+                                      day: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    })}
+                                  </span>
+                                  
+                                  {patch.metadata.requiredObjects.length > 0 && (
+                                    <span className="text-xs text-gray-500 flex items-center gap-1.5">
+                                      <Package className="w-3 h-3" />
+                                      {patch.metadata.requiredObjects.length} objects
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
                             </div>
-                            <span className="text-xs text-gray-500">
-                              {new Date(patch.created).toLocaleTimeString()}
-                            </span>
+
+                            {patch.errorHistory && patch.errorHistory.length > 0 && (
+                              <div className="mt-2 pt-2 border-t border-[#404040]/50">
+                                {patch.errorHistory.map((error, errorIndex) => (
+                                  <div key={errorIndex} className="flex items-start gap-2 mt-2 first:mt-0">
+                                    <AlertCircle className="w-3.5 h-3.5 text-orange-400/90 mt-0.5 flex-shrink-0" />
+                                    <div className="flex-1 min-w-0">
+                                      <div className="text-xs text-orange-400/90 line-clamp-1">
+                                        {error.error}
+                                      </div>
+                                      <div className="flex items-center gap-3 mt-1">
+                                        <span className="text-[10px] text-gray-500">
+                                          {new Date(error.timestamp).toLocaleString([], {
+                                            hour: '2-digit',
+                                            minute: '2-digit'
+                                          })}
+                                        </span>
+                                        {error.regeneratedPatch && (
+                                          <span className="text-[10px] text-emerald-400/90 flex items-center gap-1">
+                                            <CheckCircle className="w-2.5 h-2.5" />
+                                            Fixed
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                          
-                          {patch.errorHistory && patch.errorHistory.length > 0 && (
-                            <div className="mt-2 text-xs text-gray-400 bg-[#1e1e1e] rounded p-2 font-mono">
-                              <div className="flex items-center gap-1 mb-1">
-                                <AlertCircle className="w-3 h-3 text-orange-400" />
-                                <span className="text-orange-400">Fixed Error:</span>
-                              </div>
-                              <div className="line-clamp-2">
-                                {patch.errorHistory[0].error}
-                              </div>
-                            </div>
-                          )}
                         </div>
                       ))}
-
-                    {history.filter((patch: PdPatch) => patch.description.includes("Regenerated")).length === 0 && (
-                      <div className="text-sm text-gray-500 text-center py-4">
-                        No revisions yet
-                      </div>
-                    )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -499,133 +712,6 @@ function App() {
           </div>
         </div>
       </div>
-
-      {/* Floating Help Button */}
-      <div className="fixed bottom-4 right-4 z-50">
-        <button
-          onClick={() => setShowGettingStarted(true)}
-          className="flex items-center justify-center w-10 h-10 bg-blue-600 hover:bg-blue-700 rounded-full shadow-lg transition-colors"
-          title="Getting Started"
-        >
-          <HelpCircle className="w-5 h-5" />
-        </button>
-      </div>
-
-      {/* Getting Started Popup */}
-      {showGettingStarted && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-[#252526] rounded-lg shadow-xl w-[480px] border border-[#404040]">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[#404040]">
-              <h3 className="text-sm font-medium">Getting Started</h3>
-              <button
-                onClick={() => setShowGettingStarted(false)}
-                className="p-1 hover:bg-[#2d2d2d] rounded"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="p-4 text-sm space-y-3">
-              <p>Welcome to the Pure Data Patch Generator! Here's how to get started:</p>
-              <ol className="list-decimal list-inside space-y-2 pl-2">
-                <li>Enter a description of the audio patch you want to create in the prompt box</li>
-                <li>Click "Generate Patch" or press ⌘/Ctrl + Enter</li>
-                <li>View the generated patch in the editor</li>
-                <li>Read the explanation panel for details about how the patch works</li>
-                <li>Download the .pd file to use in Pure Data</li>
-              </ol>
-              <div className="mt-4 p-3 bg-[#1e1e1e] rounded text-xs">
-                <p className="font-medium mb-2">Keyboard Shortcuts:</p>
-                <ul className="space-y-1">
-                  <li>⌘/Ctrl + Enter: Generate patch</li>
-                  <li>⌘/Ctrl + S: Download patch</li>
-                  <li>⌘/Ctrl + E: Toggle explanation panel</li>
-                  <li>⌘/Ctrl + H: Toggle history panel</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Add API Settings Modal */}
-      {showApiSettings && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-[#252526] rounded-lg shadow-xl w-[480px] border border-[#404040]">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[#404040]">
-              <h3 className="text-sm font-medium">OpenAI API Settings</h3>
-              <button
-                onClick={() => {
-                  setShowApiSettings(false);
-                  setApiKeyError(null);
-                }}
-                className="p-1 hover:bg-[#2d2d2d] rounded"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <form onSubmit={handleApiKeySubmit} className="p-4">
-              <div className="space-y-2">
-                <label htmlFor="apiKey" className="block text-sm font-medium">
-                  OpenAI API Key
-                </label>
-                <input
-                  type="password"
-                  id="apiKey"
-                  value={apiKey}
-                  onChange={(e) => {
-                    setApiKey(e.target.value);
-                    setApiKeyError(null);
-                  }}
-                  className={`w-full px-3 py-2 bg-[#1e1e1e] border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                    apiKeyError 
-                      ? 'border-red-500/50' 
-                      : 'border-[#404040]'
-                  }`}
-                  placeholder="sk-..."
-                />
-                {apiKeyError && (
-                  <div className="flex items-center gap-2 text-xs text-red-400">
-                    <AlertCircle className="w-4 h-4" />
-                    {apiKeyError}
-                  </div>
-                )}
-                <p className="text-xs text-gray-400">
-                  Your API key will be stored locally in your browser and is never sent to our servers.
-                </p>
-              </div>
-              <div className="mt-4 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowApiSettings(false);
-                    setApiKeyError(null);
-                  }}
-                  className="px-3 py-2 text-sm bg-[#2d2d2d] hover:bg-[#3d3d3d] rounded-md transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
-                >
-                  Save API Key
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      <Toaster 
-        position="bottom-right"
-        toastOptions={{
-          style: {
-            background: '#252526',
-            color: '#fff',
-            border: '1px solid #404040'
-          }
-        }}
-      />
     </div>
   );
 }

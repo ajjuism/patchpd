@@ -22,6 +22,11 @@ export interface PdPatch {
   errorHistory?: Array<{
     error: string;
     timestamp: Date;
+    regeneratedPatch?: {
+      content: string;
+      explanation: string;
+      timestamp: Date;
+    };
   }>;
 }
 

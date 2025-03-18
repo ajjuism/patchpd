@@ -17,7 +17,7 @@ export async function generatePdPatch(prompt: string, errorFeedback?: string, re
   });
 
   try {
-    // Add timeout to OpenAI call
+    // Increase timeout to 60 seconds
     const completion = await Promise.race([
       openai.chat.completions.create({
         messages: [
@@ -68,11 +68,11 @@ Step-by-step explanation of the patch...`,
           }] : [])
         ],
         model: "gpt-4",
-        temperature: 0.7, // Add some variation but keep it focused
-        max_tokens: 2000, // Limit response size
+        temperature: 0.7,
+        max_tokens: 2000,
       }),
       new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('OpenAI request timeout')), 30000)
+        setTimeout(() => reject(new Error('Request timed out after 60 seconds. Please try again.')), 60000)
       )
     ]);
 
@@ -127,7 +127,10 @@ Step-by-step explanation of the patch...`,
     };
 
   } catch (error: any) {
-    // Handle specific OpenAI API errors
+    // Add specific handling for timeout errors
+    if (error.message.includes('timed out')) {
+      throw new Error('Generation is taking longer than expected. Please try again or use a simpler prompt.');
+    }
     if (error.message === 'API_KEY_MISSING') {
       throw new Error('Please set your OpenAI API key in the settings to generate patches');
     }
@@ -140,7 +143,10 @@ Step-by-step explanation of the patch...`,
     if (error.status === 429) {
       throw new Error('API rate limit exceeded. Please try again later');
     }
-    // Re-throw other errors
-    throw error;
+    if (error.status === 503) {
+      throw new Error('OpenAI service is temporarily unavailable. Please try again in a few minutes');
+    }
+    // Add a more user-friendly generic error message
+    throw new Error('Failed to generate patch. Please try again or check your internet connection');
   }
 }
