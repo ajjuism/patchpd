@@ -267,24 +267,42 @@ function App() {
     <div className="h-screen bg-[#1e1e1e] text-gray-300 flex flex-col overflow-hidden" onKeyDown={handleKeyDown}>
       {/* Activity Bar */}
       <div className="fixed left-0 top-0 bottom-0 w-12 bg-[#333333] border-r border-[#404040] flex flex-col items-center py-2 z-10">
-        <button 
-          onClick={() => setActiveTab('explorer')}
-          className={`p-2.5 ${activeTab === 'explorer' ? 'text-white bg-[#2d2d2d]' : 'text-gray-400'} hover:text-white transition-colors rounded-lg mb-2`}
-        >
-          <FileCode2 className="w-5 h-5" />
-        </button>
-        <button 
-          onClick={() => setActiveTab('history')}
-          className={`p-2.5 ${activeTab === 'history' ? 'text-white bg-[#2d2d2d]' : 'text-gray-400'} hover:text-white transition-colors rounded-lg mb-2`}
-        >
-          <History className="w-5 h-5" />
-        </button>
-        <button 
-          onClick={() => setActiveTab('settings')}
-          className={`p-2.5 ${activeTab === 'settings' ? 'text-white bg-[#2d2d2d]' : 'text-gray-400'} hover:text-white transition-colors rounded-lg`}
-        >
-          <Settings className="w-5 h-5" />
-        </button>
+        {/* Top section with main navigation */}
+        <div className="flex flex-col items-center">
+          <button 
+            onClick={() => setActiveTab('explorer')}
+            className={`p-2.5 ${activeTab === 'explorer' ? 'text-white bg-[#2d2d2d]' : 'text-gray-400'} hover:text-white transition-colors rounded-lg mb-2`}
+          >
+            <FileCode2 className="w-5 h-5" />
+          </button>
+          <button 
+            onClick={() => setActiveTab('history')}
+            className={`p-2.5 ${activeTab === 'history' ? 'text-white bg-[#2d2d2d]' : 'text-gray-400'} hover:text-white transition-colors rounded-lg mb-2`}
+          >
+            <History className="w-5 h-5" />
+          </button>
+          <button 
+            onClick={() => setActiveTab('settings')}
+            className={`p-2.5 ${activeTab === 'settings' ? 'text-white bg-[#2d2d2d]' : 'text-gray-400'} hover:text-white transition-colors rounded-lg`}
+          >
+            <Settings className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* New Patch Button - Fixed at bottom */}
+        <div className="flex-1 flex flex-col justify-end">
+          <button 
+            onClick={() => {
+              setCurrentPatch(null);
+              setPrompt('');
+              setPdErrors('');
+            }}
+            className="p-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-lg"
+            title="New Patch"
+          >
+            <FileIcon className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
       {/* Main Layout */}
@@ -340,61 +358,88 @@ function App() {
                   </button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto custom-scrollbar">
-                  {history.map((patch: PdPatch, index: number) => (
-                    <div
-                      key={index}
-                      onClick={() => setCurrentPatch(patch)}
-                      className={`group px-3 py-2.5 rounded-md cursor-pointer transition-all
-                                 hover:bg-[#2d2d2d] ${currentPatch?.name === patch.name ? 'bg-[#2d2d2d]' : ''}`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <FileIcon className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between">
-                            <div className="text-sm text-gray-300 font-medium truncate">
-                              {truncateText(patch.description, 40)}
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
+                  <div className="space-y-2">
+                    {history.map((patch: PdPatch, index: number) => (
+                      <div
+                        key={index}
+                        onClick={() => setCurrentPatch(patch)}
+                        className={`group rounded-lg border transition-all cursor-pointer
+                          ${currentPatch?.name === patch.name 
+                            ? 'border-orange-500/20 bg-orange-500/5' 
+                            : 'border-[#404040] hover:border-orange-500/20 hover:bg-[#2d2d2d]'
+                          }`}
+                      >
+                        <div className="p-3">
+                          <div className="flex items-start gap-3">
+                            <FileIcon className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" />
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm text-gray-200 font-medium leading-snug">
+                                {truncateText(patch.description, 60)}
+                              </div>
+                              
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-2">
+                                <span className="text-xs text-gray-400 flex items-center gap-1.5">
+                                  <Clock className="w-3 h-3 text-gray-500" />
+                                  {new Date(patch.created).toLocaleString([], {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </span>
+                                
+                                {patch.metadata.requiredObjects.length > 0 && (
+                                  <span className="text-xs text-gray-400 flex items-center gap-1.5">
+                                    <Package className="w-3 h-3 text-gray-500" />
+                                    {patch.metadata.requiredObjects.length} objects
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                            <span className="text-xs text-gray-500 flex-shrink-0">
-                              {new Date(patch.created).toLocaleDateString()}
-                            </span>
                           </div>
-                          
-                          <div className="flex items-center gap-3 mt-1.5">
-                            <span className="text-xs text-gray-500 flex items-center gap-1.5">
-                              <Clock className="w-3 h-3" />
-                              {new Date(patch.created).toLocaleTimeString([], {
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
-                            </span>
-                            
-                            {patch.metadata.requiredObjects.length > 0 && (
-                              <span className="text-xs text-gray-500 flex items-center gap-1.5">
-                                <Package className="w-3 h-3" />
-                                {patch.metadata.requiredObjects.length} objects
-                              </span>
-                            )}
-                            
-                            {patch.errorHistory && patch.errorHistory.length > 0 && (
-                              <span className="text-xs text-orange-400/90 flex items-center gap-1.5">
-                                <AlertCircle className="w-3 h-3" />
-                                {patch.errorHistory.length} {patch.errorHistory.length === 1 ? 'error' : 'errors'}
-                              </span>
-                            )}
-                          </div>
+
+                          {patch.errorHistory && patch.errorHistory.length > 0 && (
+                            <div className="mt-2.5 pt-2.5 border-t border-[#404040]/50">
+                              {patch.errorHistory.slice(0, 2).map((error, errorIndex) => (
+                                <div 
+                                  key={errorIndex} 
+                                  className={`flex items-start gap-2 ${errorIndex > 0 ? 'mt-2' : ''}`}
+                                >
+                                  <AlertCircle className="w-3.5 h-3.5 text-orange-400/90 mt-0.5 flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-xs text-orange-400/90 line-clamp-1 leading-relaxed">
+                                      {error.error}
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <span className="text-[10px] text-gray-500 flex items-center gap-1">
+                                        <Clock className="w-2.5 h-2.5" />
+                                        {new Date(error.timestamp).toLocaleString([], {
+                                          hour: '2-digit',
+                                          minute: '2-digit'
+                                        })}
+                                      </span>
+                                      {error.regeneratedPatch && (
+                                        <span className="text-[10px] text-emerald-400/90 flex items-center gap-1 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                                          <CheckCircle className="w-2.5 h-2.5" />
+                                          Fixed
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                              {patch.errorHistory.length > 2 && (
+                                <div className="mt-2 text-xs text-gray-500">
+                                  +{patch.errorHistory.length - 2} more errors...
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
-                    </div>
-                  ))}
-
-                  {history.length === 0 && (
-                    <div className="flex flex-col items-center justify-center h-full text-gray-500">
-                      <History className="w-8 h-8 mb-2 opacity-20" />
-                      <p className="text-sm">No generations yet</p>
-                      <p className="text-xs mt-1 opacity-60">Generated patches will appear here</p>
-                    </div>
-                  )}
+                    ))}
+                  </div>
                 </div>
               </div>
             ) : activeTab === 'explorer' ? (
@@ -440,9 +485,88 @@ function App() {
                 </button>
               </div>
             ) : (
-              <div className="p-4">
-                <div className="text-sm text-gray-500">
-                  Explorer content goes here
+              <div className="p-4 flex flex-col h-full">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <History className="w-4 h-4 text-gray-400" />
+                    <h3 className="text-sm font-medium text-gray-400">Revision History</h3>
+                  </div>
+                  <span className="text-xs text-gray-500">{history.length} items</span>
+                </div>
+
+                <div className="flex-1 overflow-y-auto">
+                  <div className="space-y-2">
+                    {history.map((patch: PdPatch, index: number) => (
+                      <div
+                        key={index}
+                        onClick={() => setCurrentPatch(patch)}
+                        className={`group rounded-lg border transition-all
+                          ${currentPatch?.name === patch.name 
+                            ? 'border-orange-500/20 bg-orange-500/5' 
+                            : 'border-[#404040] hover:border-orange-500/20 hover:bg-[#2d2d2d]'
+                          }`}
+                      >
+                        <div className="px-3 py-2">
+                          <div className="flex items-start gap-2.5">
+                            <FileIcon className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" />
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm text-gray-200 font-medium truncate">
+                                {truncateText(patch.description, 40)}
+                              </div>
+                              
+                              <div className="flex items-center gap-3 mt-1.5">
+                                <span className="text-xs text-gray-500 flex items-center gap-1.5">
+                                  <Clock className="w-3 h-3" />
+                                  {new Date(patch.created).toLocaleString([], {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </span>
+                                
+                                {patch.metadata.requiredObjects.length > 0 && (
+                                  <span className="text-xs text-gray-500 flex items-center gap-1.5">
+                                    <Package className="w-3 h-3" />
+                                    {patch.metadata.requiredObjects.length} objects
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {patch.errorHistory && patch.errorHistory.length > 0 && (
+                            <div className="mt-2 pt-2 border-t border-[#404040]/50">
+                              {patch.errorHistory.map((error, errorIndex) => (
+                                <div key={errorIndex} className="flex items-start gap-2 mt-2 first:mt-0">
+                                  <AlertCircle className="w-3.5 h-3.5 text-orange-400/90 mt-0.5 flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-xs text-orange-400/90 line-clamp-1">
+                                      {error.error}
+                                    </div>
+                                    <div className="flex items-center gap-3 mt-1">
+                                      <span className="text-[10px] text-gray-500">
+                                        {new Date(error.timestamp).toLocaleString([], {
+                                          hour: '2-digit',
+                                          minute: '2-digit'
+                                        })}
+                                      </span>
+                                      {error.regeneratedPatch && (
+                                        <span className="text-[10px] text-emerald-400/90 flex items-center gap-1">
+                                          <CheckCircle className="w-2.5 h-2.5" />
+                                          Fixed
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
