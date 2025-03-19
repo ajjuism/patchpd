@@ -110,14 +110,8 @@ function App() {
       toast.success('Patch generated successfully!');
     } catch (error: any) {
       if (error.message.includes('API key')) {
-        toast.error(error.message, {
-          duration: 5000,
-          icon: '🔑',
-          action: {
-            label: 'Set API Key',
-            onClick: () => setShowApiSettings(true),
-          },
-        });
+        toast.error(error.message);
+        setShowApiSettings(true);
       } else {
         toast.error(`Error: ${error.message}`);
       }
@@ -942,7 +936,42 @@ function App() {
         )}
       </div>
 
-      <Toaster position="bottom-right" />
+      <Toaster 
+        position="bottom-right" 
+        toastOptions={{
+          style: {
+            background: '#1e1e1e',
+            color: '#e5e7eb',
+            border: '1px solid #404040',
+            padding: '12px 16px',
+            fontSize: '14px',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+          },
+          success: {
+            iconTheme: {
+              primary: '#10b981',
+              secondary: '#1e1e1e',
+            },
+            style: {
+              border: '1px solid rgba(16, 185, 129, 0.2)',
+              background: '#1a1e1b',
+              backgroundImage: 'linear-gradient(to bottom, rgba(16, 185, 129, 0.08), rgba(16, 185, 129, 0.04))',
+            },
+          },
+          error: {
+            iconTheme: {
+              primary: '#ef4444',
+              secondary: '#1e1e1e',
+            },
+            style: {
+              border: '1px solid rgba(239, 68, 68, 0.2)',
+              background: '#1e1b1b',
+              backgroundImage: 'linear-gradient(to bottom, rgba(239, 68, 68, 0.08), rgba(239, 68, 68, 0.04))',
+            },
+          },
+          duration: 3000,
+        }}
+      />
     </div>
   );
 }
